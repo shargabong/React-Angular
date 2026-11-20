@@ -1,6 +1,7 @@
 # Модуль 3. Мониторинг сайтов
 
-Репозиторий проекта: https://github.com/shargabong/monitoring
+- Репозиторий проекта: https://github.com/shargabong/monitoring
+- Сайт: https://shargabong.github.io/monitoring/
 
 ## Что получилось
 
