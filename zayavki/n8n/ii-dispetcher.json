@@ -1,0 +1,197 @@
+{
+  "name": "ИИ-диспетчер",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zayavka",
+        "options": {
+          "allowedOrigins": "http://localhost:5173"
+        }
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "zayavka",
+      "id": "ff28c129-d28a-4a0a-ab15-ad9872761a9d"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: 'qwen2.5:3b',\n  stream: false,\n  format: {\n    type: 'object',\n    properties: {\n      category: { type: 'string', enum: ['Компьютер', 'Проектор', 'Принтер', 'Интернет'] },\n      urgent: { type: 'boolean' },\n      summary: { type: 'string' }\n    },\n    required: ['category', 'urgent', 'summary']\n  },\n  messages: [\n    { role: 'system', content: 'Ты диспетчер ИТ-отдела колледжа. По заявке определи категорию (Компьютер, Проектор, Принтер, Интернет), срочность и напиши краткое описание до 12 слов. Срочно, если срывается занятие или экзамен, пропал интернет у целого кабинета или есть риск для безопасности. Отвечай только JSON.' },\n    { role: 'user', content: 'Что случилось: ' + $json.body.title + '\\nКабинет: ' + $json.body.room + '\\nКатегория от автора: ' + $json.body.category + '\\nПодробности: ' + $json.body.details }\n  ]\n} }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Модель",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "2f8f4e87-a330-4cf2-aeed-0f2a029d1b3c"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "id",
+              "value": "={{ $('Webhook').item.json.body.id }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "title",
+              "value": "={{ $('Webhook').item.json.body.title }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "room",
+              "value": "={{ $('Webhook').item.json.body.room }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "category",
+              "value": "={{ JSON.parse($json.message.content).category }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "urgent",
+              "value": "={{ JSON.parse($json.message.content).urgent }}",
+              "type": "boolean"
+            },
+            {
+              "id": "a6",
+              "name": "summary",
+              "value": "={{ JSON.parse($json.message.content).summary }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Ответ модели",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ],
+      "id": "3194e396-0976-4e47-8fcb-220ae7a3451d"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=http://pocketbase:8090/api/collections/it_requests/records/{{ $json.id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { category: $json.category } }}",
+        "options": {}
+      },
+      "name": "Категория в базу",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "170ffe6e-1772-47a6-a5ce-2c11ed0e56c9"
+    },
+    {
+      "parameters": {
+        "chatId": "",
+        "text": "={{ $('Ответ модели').item.json.urgent ? '🔴 СРОЧНО\\n' : '' }}Заявка: {{ String($('Ответ модели').item.json.title).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}\nКабинет: {{ String($('Ответ модели').item.json.room).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }} · {{ $('Ответ модели').item.json.category }}\n{{ String($('Ответ модели').item.json.summary).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;') }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Взять",
+                    "additionalFields": {
+                      "callback_data": "=take:{{ $('Ответ модели').item.json.id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "6b5656fd-0ed9-45bb-aac4-61369f578d8b",
+      "webhookId": "ccad4438-cfb1-4a94-b0be-0dd392ca16a1"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Модель",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Модель": {
+      "main": [
+        [
+          {
+            "node": "Ответ модели",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ответ модели": {
+      "main": [
+        [
+          {
+            "node": "Категория в базу",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Категория в базу": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": null
+}
